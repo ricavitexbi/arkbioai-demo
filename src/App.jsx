@@ -61,8 +61,8 @@ const colors = {
 
 // ── Components ──
 
-function NavBar({ currentStep, onNavigate }) {
-  const steps = [
+function NavBar({ currentStep, onNavigate, steps }) {
+  const navSteps = steps || [
     { id: "home", label: "Início", icon: "◈" },
     { id: "upload", label: "Upload", icon: "↑" },
     { id: "pipeline", label: "Pipeline", icon: "⚡" },
@@ -88,9 +88,9 @@ function NavBar({ currentStep, onNavigate }) {
         </span>
       </div>
       <div style={{ display: "flex", gap: 2, flex: 1 }}>
-        {steps.map((step, i) => {
+        {navSteps.map((step, i) => {
           const active = currentStep === step.id;
-          const passed = steps.findIndex(s => s.id === currentStep) > i;
+          const passed = navSteps.findIndex(s => s.id === currentStep) > i;
           return (
             <button key={step.id} onClick={() => onNavigate(step.id)}
               style={{
@@ -850,15 +850,512 @@ function ReportScreen({ gene, onBack }) {
   );
 }
 
+// ── Exploration Mode: Select Organism/Strain ──
+
+const ORGANISMS = [
+  {
+    id: "kphaffii", name: "K. phaffii", alt: "Pichia pastoris", icon: "🧫",
+    desc: "Sistema de expressão heteróloga dominante para proteínas recombinantes industriais.",
+    strains: [
+      { id: "GS115", samples: 142, datasets: 4, status: "ready" },
+      { id: "X-33", samples: 58, datasets: 2, status: "ready" },
+      { id: "KM71", samples: 25, datasets: 1, status: "ready" },
+    ],
+    genes: "5.116", papers: "19-20", tags: ["biofármacos", "enzimas", "recombinantes"],
+    color: colors.cyan,
+  },
+  {
+    id: "scerevisiae", name: "S. cerevisiae", alt: "Baker's yeast", icon: "🍺",
+    desc: "Organismo modelo eucarioto. Ampla base de dados públicos e ferramentas genéticas.",
+    strains: [
+      { id: "BY4741", samples: 320, datasets: 8, status: "ready" },
+      { id: "W303", samples: 185, datasets: 5, status: "ready" },
+      { id: "CEN.PK", samples: 90, datasets: 3, status: "beta" },
+    ],
+    genes: "6.275", papers: "50+", tags: ["biocombustíveis", "metabólitos", "modelo"],
+    color: colors.purple,
+  },
+  {
+    id: "ecoli", name: "E. coli", alt: "Bacterium", icon: "🦠",
+    desc: "Bactéria mais utilizada em biotecnologia. Requer validação do pipeline (metabolismo distinto).",
+    strains: [
+      { id: "BL21(DE3)", samples: 410, datasets: 12, status: "beta" },
+      { id: "K-12 MG1655", samples: 280, datasets: 7, status: "beta" },
+    ],
+    genes: "4.321", papers: "100+", tags: ["pharma", "industrial", "bactéria"],
+    color: colors.orange,
+  },
+];
+
+function ExploreSelectScreen({ onSelect }) {
+  const [selectedOrg, setSelectedOrg] = useState(null);
+  const [selectedStrain, setSelectedStrain] = useState(null);
+
+  return (
+    <div style={{ padding: "80px 40px 40px", maxWidth: 1000, margin: "0 auto" }}>
+      <h2 style={{ fontSize: 32, fontWeight: 700, color: colors.white, fontFamily: "'Outfit', sans-serif", margin: "40px 0 8px" }}>
+        Modo Exploração
+      </h2>
+      <p style={{ fontSize: 15, color: colors.textMuted, marginBottom: 36 }}>
+        Selecione organismo e cepa. O sistema buscará dados públicos, montará o pipeline e entregará rankings priorizados.
+      </p>
+
+      {/* Organism cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 32 }}>
+        {ORGANISMS.map(org => {
+          const active = selectedOrg?.id === org.id;
+          return (
+            <div key={org.id} onClick={() => { setSelectedOrg(org); setSelectedStrain(null); }}
+              style={{
+                background: active ? `${org.color}10` : colors.card,
+                borderRadius: 14, padding: 24, cursor: "pointer",
+                border: `2px solid ${active ? org.color : colors.card2}`,
+                transition: "all 0.25s",
+              }}
+              onMouseEnter={e => !active && (e.currentTarget.style.borderColor = `${org.color}60`)}
+              onMouseLeave={e => !active && (e.currentTarget.style.borderColor = colors.card2)}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                <span style={{ fontSize: 28 }}>{org.icon}</span>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: colors.white, fontFamily: "'Outfit', sans-serif" }}>{org.name}</div>
+                  <div style={{ fontSize: 12, color: colors.textMuted }}>{org.alt}</div>
+                </div>
+              </div>
+              <p style={{ fontSize: 13, color: colors.textMuted, lineHeight: 1.5, margin: "0 0 16px" }}>{org.desc}</p>
+              <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+                <div><span style={{ fontSize: 11, color: colors.textMuted }}>Genes: </span><span style={{ fontSize: 13, fontWeight: 600, color: org.color }}>{org.genes}</span></div>
+                <div><span style={{ fontSize: 11, color: colors.textMuted }}>Papers: </span><span style={{ fontSize: 13, fontWeight: 600, color: org.color }}>{org.papers}</span></div>
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {org.tags.map(tag => (
+                  <span key={tag} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 12, background: `${org.color}15`, color: org.color, fontWeight: 500 }}>{tag}</span>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Strain selection */}
+      {selectedOrg && (
+        <div style={{
+          background: colors.card, borderRadius: 14, padding: 24, marginBottom: 28,
+          border: `1px solid ${selectedOrg.color}30`,
+        }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: colors.white, marginBottom: 4 }}>
+            Selecione a cepa de {selectedOrg.name}
+          </div>
+          <div style={{ fontSize: 13, color: colors.textMuted, marginBottom: 20 }}>
+            Rankings serão personalizados para a cepa escolhida. Genes classificados como UNIVERSAL vs CEPA-ESPECÍFICO.
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {selectedOrg.strains.map(strain => {
+              const active = selectedStrain?.id === strain.id;
+              const isBeta = strain.status === "beta";
+              return (
+                <div key={strain.id} onClick={() => setSelectedStrain(strain)}
+                  style={{
+                    background: active ? `${selectedOrg.color}18` : colors.card2,
+                    borderRadius: 10, padding: "16px 24px", cursor: "pointer",
+                    border: `2px solid ${active ? selectedOrg.color : "transparent"}`,
+                    transition: "all 0.2s", minWidth: 180,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: colors.white, fontFamily: "monospace" }}>{strain.id}</span>
+                    {isBeta && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 8, background: `${colors.orange}20`, color: colors.orange, fontWeight: 600 }}>BETA</span>}
+                  </div>
+                  <div style={{ fontSize: 12, color: colors.textMuted }}>
+                    {strain.samples} amostras · {strain.datasets} datasets
+                  </div>
+                  {active && <div style={{ marginTop: 8, fontSize: 11, color: selectedOrg.color, fontWeight: 600 }}>✓ Selecionada</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Summary + GO button */}
+      {selectedOrg && selectedStrain && (
+        <div style={{
+          background: `linear-gradient(135deg, ${selectedOrg.color}08, ${colors.card})`,
+          borderRadius: 14, padding: 24,
+          border: `1px solid ${selectedOrg.color}40`,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          flexWrap: "wrap", gap: 16,
+        }}>
+          <div>
+            <div style={{ fontSize: 14, color: colors.textMuted, marginBottom: 4 }}>Análise configurada:</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: colors.white }}>
+              {selectedOrg.name} — cepa <span style={{ color: selectedOrg.color }}>{selectedStrain.id}</span>
+            </div>
+            <div style={{ fontSize: 13, color: colors.textMuted, marginTop: 4 }}>
+              {selectedStrain.samples} amostras · {selectedOrg.genes} genes · {selectedStrain.datasets} datasets GEO
+            </div>
+          </div>
+          <button onClick={() => onSelect({ org: selectedOrg, strain: selectedStrain })}
+            style={{
+              padding: "14px 36px", borderRadius: 12, border: "none", cursor: "pointer",
+              background: selectedOrg.color, color: colors.bg, fontSize: 16, fontWeight: 700,
+              display: "flex", alignItems: "center", gap: 8,
+            }}
+          >
+            ⚡ Iniciar Exploração
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Exploration Mode: Pipeline ──
+
+function ExplorePipelineScreen({ config, onNext }) {
+  const [progress, setProgress] = useState(0);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [logs, setLogs] = useState([]);
+
+  const orgName = config?.org?.name || "K. phaffii";
+  const strainId = config?.strain?.id || "GS115";
+  const orgColor = config?.org?.color || colors.cyan;
+  const nSamples = config?.strain?.samples || 142;
+  const nDatasets = config?.strain?.datasets || 4;
+  const nGenes = config?.org?.genes || "5.116";
+
+  const steps = [
+    {
+      label: "Busca de dados no NCBI GEO",
+      desc: `Consultando API Entrez para datasets de ${orgName}...`,
+      icon: "🔍", duration: 8, color: colors.blue,
+      detail: `${nDatasets} datasets encontrados · ${nSamples} amostras RNA-seq`,
+      logs: [
+        `[GEO] Querying NCBI GEO: "${orgName}" AND "RNA-seq"`,
+        `[GEO] Found ${nDatasets} series: GSE123456, GSE234567...`,
+        `[GEO] Downloading series matrix files...`,
+        `[GEO] ${nSamples} samples identified across ${nDatasets} datasets`,
+      ]
+    },
+    {
+      label: "Extração de metadados",
+      desc: "Parseando SRA metadata, identificando cepas e condições...",
+      icon: "📋", duration: 7, color: colors.purple,
+      detail: `Cepas mapeadas: ${strainId} + variantes · Condições: alta/baixa secreção`,
+      logs: [
+        `[META] Parsing SRA run table for sample attributes...`,
+        `[META] Mapping strain identifiers: ${strainId} detected in ${Math.round(nSamples*0.6)} samples`,
+        `[META] Conditions classified: High secretion (${Math.round(nSamples*0.42)}), Low (${Math.round(nSamples*0.58)})`,
+        `[META] Cross-referencing strain background: GQ67_* (Y-11430) vs PAS_* (GS115)`,
+      ]
+    },
+    {
+      label: "Controle de qualidade",
+      desc: "Filtrando amostras de baixa qualidade e outliers...",
+      icon: "🧹", duration: 6, color: colors.orange,
+      detail: `${Math.round(nSamples*0.92)} amostras passaram QC (${Math.round(nSamples*0.08)} removidas)`,
+      logs: [
+        `[QC] Computing per-sample statistics (library size, genes detected)...`,
+        `[QC] Flagged ${Math.round(nSamples*0.05)} samples: library size < 1M reads`,
+        `[QC] Flagged ${Math.round(nSamples*0.03)} samples: outlier by PCA (>3 SD)`,
+        `[QC] ${Math.round(nSamples*0.92)} samples passed quality filters`,
+      ]
+    },
+    {
+      label: "Normalização: counts → TPM",
+      desc: "Convertendo raw counts para TPM usando gene lengths do genoma de referência...",
+      icon: "📐", duration: 8, color: colors.cyan,
+      detail: `${nGenes} genes quantificados em TPM · Genoma ref: ASM170810v1`,
+      logs: [
+        `[TPM] Loading gene lengths from ${orgName} reference genome...`,
+        `[TPM] Computing reads per kilobase (RPK) for ${nGenes} genes...`,
+        `[TPM] Scaling to transcripts per million (TPM)...`,
+        `[TPM] Verifying: column sums = 1e6 ✓ for all ${Math.round(nSamples*0.92)} samples`,
+      ]
+    },
+    {
+      label: "Mapeamento de cepas vs modificações",
+      desc: "Separando efeito de background genômico do efeito de engenharia...",
+      icon: "🧬", duration: 7, color: colors.green,
+      detail: `Genomas mapeados: Y-11430 (GQ67_*) vs GS115 (PAS_*) vs CBS7435`,
+      logs: [
+        `[STRAIN] Fetching reference genomes from NCBI...`,
+        `[STRAIN] Mapping ${strainId} to reference: Y-11430 / GQ67_* gene IDs`,
+        `[STRAIN] Separating strain background from genetic modifications (AOX1, GAP, etc.)`,
+        `[STRAIN] Metadata enriched: strain_effect ≠ modification_effect for ${nGenes} genes`,
+      ]
+    },
+    {
+      label: "Feature Selection (ANOVA + RF)",
+      desc: `Reduzindo ${nGenes} genes para os 500 mais informativos...`,
+      icon: "🎯", duration: 10, color: colors.purple,
+      detail: `${nGenes} → 500 genes · ANOVA F-test + Random Forest importances`,
+      logs: [
+        `[FS] Running ANOVA F-test across ${nGenes} genes...`,
+        `[FS] Top 1000 by F-score selected (p < 0.001)`,
+        `[FS] Training RF for feature importance ranking...`,
+        `[FS] Intersection ANOVA ∩ RF: 500 genes retained`,
+      ]
+    },
+    {
+      label: "Treinamento: 6 modelos ML + Optuna",
+      desc: "Random Forest, XGBoost, LightGBM, SVM, MLP, LogReg...",
+      icon: "⚙️", duration: 18, color: colors.cyan,
+      detail: "Cada modelo otimizado com 50 trials Optuna · Validação cruzada stratified 5-fold",
+      logs: [
+        `[ML] Training Random Forest (50 Optuna trials)... Acc: 0.94`,
+        `[ML] Training XGBoost (50 trials)... Acc: 0.95`,
+        `[ML] Training LightGBM (50 trials)... Acc: 0.93`,
+        `[ML] Training SVM-RBF (50 trials)... Acc: 0.91`,
+        `[ML] Training MLP (50 trials)... Acc: 0.89`,
+        `[ML] Training Logistic Regression... Acc: 0.87`,
+      ]
+    },
+    {
+      label: "Ensemble Bayesian Model Averaging",
+      desc: "Combinando 6 modelos com pesos Bayesianos...",
+      icon: "🧠", duration: 6, color: colors.purple,
+      detail: "BMA Bal. Accuracy: 97% · Pesos: XGB 0.28, RF 0.24, LGBM 0.20, ...",
+      logs: [
+        `[BMA] Computing posterior model probabilities...`,
+        `[BMA] Weights: XGBoost=0.28, RF=0.24, LightGBM=0.20, SVM=0.14, MLP=0.09, LogReg=0.05`,
+        `[BMA] Ensemble Balanced Accuracy: 0.970`,
+        `[BMA] Generating gene-level confidence scores...`,
+      ]
+    },
+    {
+      label: "Validação metabólica (GEM/FBA)",
+      desc: `Verificando viabilidade de knockouts no modelo metabólico iMT1026v3...`,
+      icon: "🔬", duration: 8, color: colors.green,
+      detail: "47/50 KOs são metabolicamente viáveis · 3 essenciais removidos",
+      logs: [
+        `[GEM] Loading genome-scale model: iMT1026v3 (${orgName})`,
+        `[GEM] Running FBA for 50 candidate knockouts...`,
+        `[GEM] Essential genes detected: 3 (growth rate < 10% of WT)`,
+        `[GEM] 47/50 KO candidates validated as metabolically viable ✓`,
+      ]
+    },
+    {
+      label: "Otimização Pareto (secreção × cepa)",
+      desc: "Calculando fronteira de Pareto multi-objetivo...",
+      icon: "📊", duration: 5, color: colors.orange,
+      detail: "100 genes priorizados: 50 KO + 50 OE · UNIVERSAL vs CEPA-ESPECÍFICO",
+      logs: [
+        `[PARETO] Computing secretion scores (BMA ensemble)...`,
+        `[PARETO] Computing strain specificity index per gene...`,
+        `[PARETO] Classifying: UNIVERSAL (${42} genes), CEPA-ESPECÍFICO (${38}), HOUSEKEEPING (${20})`,
+        `[PARETO] Top 100 candidates selected (50 KO + 50 OE)`,
+      ]
+    },
+    {
+      label: "Geração de relatórios LLM",
+      desc: "Claude API gerando relatórios interpretativos por gene...",
+      icon: "📝", duration: 7, color: colors.blue,
+      detail: "100 reports gerados · Anotação funcional + evidência + referências",
+      logs: [
+        `[LLM] Fetching GO annotations and UniProt data for 100 genes...`,
+        `[LLM] Generating interpretive report for GQ67_04563 (Chaperona ER)...`,
+        `[LLM] Generating reports... 25/100... 50/100... 75/100...`,
+        `[LLM] All 100 gene reports generated ✓`,
+      ]
+    },
+  ];
+
+  const totalDuration = steps.reduce((acc, s) => acc + s.duration, 0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 100) { clearInterval(timer); return 100; }
+        return prev + 0.55;
+      });
+    }, 50);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    let acc = 0;
+    for (let i = 0; i < steps.length; i++) {
+      acc += (steps[i].duration / totalDuration) * 100;
+      if (progress < acc) {
+        if (i !== currentStep) {
+          setCurrentStep(i);
+          setLogs(prev => [...prev.slice(-12), ...steps[i].logs]);
+        }
+        return;
+      }
+    }
+    if (currentStep !== steps.length - 1) {
+      setCurrentStep(steps.length - 1);
+      setLogs(prev => [...prev.slice(-12), ...steps[steps.length - 1].logs]);
+    }
+  }, [progress, currentStep]);
+
+  useEffect(() => {
+    if (currentStep === 0 && logs.length === 0) {
+      setLogs(steps[0].logs);
+    }
+  }, []);
+
+  const done = progress >= 100;
+
+  return (
+    <div style={{ padding: "80px 40px 40px", maxWidth: 900, margin: "0 auto" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "40px 0 8px" }}>
+        <span style={{ fontSize: 28 }}>{config?.org?.icon || "🧫"}</span>
+        <div>
+          <h2 style={{ fontSize: 28, fontWeight: 700, color: colors.white, fontFamily: "'Outfit', sans-serif", margin: 0 }}>
+            {done ? "Exploração Completa ✓" : `Explorando ${orgName} — ${strainId}`}
+          </h2>
+          <p style={{ fontSize: 14, color: colors.textMuted, margin: "4px 0 0" }}>
+            {done ? "Rankings prontos para exploração." : "Pipeline completo: busca de dados → modelagem → relatórios."}
+          </p>
+        </div>
+      </div>
+
+      {/* Summary badges */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
+        {[
+          { l: "Datasets", v: nDatasets, c: colors.blue },
+          { l: "Amostras", v: nSamples, c: colors.purple },
+          { l: "Genes", v: nGenes, c: orgColor },
+          { l: "Cepa", v: strainId, c: colors.green },
+        ].map((b, i) => (
+          <div key={i} style={{ background: colors.card, borderRadius: 8, padding: "8px 16px", border: `1px solid ${b.c}25` }}>
+            <span style={{ fontSize: 11, color: colors.textMuted }}>{b.l}: </span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: b.c, fontFamily: "monospace" }}>{b.v}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Progress */}
+      <div style={{ background: colors.card, borderRadius: 12, height: 10, overflow: "hidden", marginBottom: 28 }}>
+        <div style={{
+          height: "100%", borderRadius: 12, transition: "width 0.3s",
+          width: `${Math.min(progress, 100)}%`,
+          background: done ? colors.green : `linear-gradient(90deg, ${colors.purple}, ${orgColor})`,
+        }} />
+      </div>
+
+      <div style={{ display: "flex", gap: 20 }}>
+        {/* Steps column */}
+        <div style={{ flex: "1 1 55%", display: "flex", flexDirection: "column", gap: 4 }}>
+          {steps.map((step, i) => {
+            const active = i === currentStep && !done;
+            const completed = i < currentStep || done;
+            const future = i > currentStep && !done;
+            return (
+              <div key={i} style={{
+                display: "flex", alignItems: "flex-start", gap: 12, padding: "10px 14px",
+                borderRadius: 10, background: active ? `${step.color}08` : "transparent",
+                border: active ? `1px solid ${step.color}25` : "1px solid transparent",
+                opacity: future ? 0.35 : 1, transition: "all 0.4s",
+              }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 14,
+                  background: completed ? `${colors.green}18` : active ? `${step.color}18` : colors.card2,
+                  border: `1.5px solid ${completed ? colors.green : active ? step.color : "transparent"}`,
+                }}>
+                  {completed ? <span style={{ color: colors.green }}>✓</span> : step.icon}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 14, fontWeight: active ? 600 : 400,
+                    color: completed ? colors.green : active ? colors.white : colors.textMuted,
+                  }}>{step.label}</div>
+                  {(active || completed) && (
+                    <div style={{ fontSize: 12, color: completed ? `${colors.green}90` : colors.textMuted, marginTop: 2 }}>
+                      {step.detail}
+                    </div>
+                  )}
+                  {active && (
+                    <div style={{ marginTop: 6, height: 3, background: colors.card2, borderRadius: 2, overflow: "hidden" }}>
+                      <div style={{ width: "60%", height: "100%", background: step.color, borderRadius: 2, animation: "pulse 1.5s ease-in-out infinite" }} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Terminal / Logs */}
+        <div style={{
+          flex: "1 1 45%", background: "#0a0c12", borderRadius: 12, padding: 16,
+          border: `1px solid ${colors.card2}`, fontFamily: "monospace", fontSize: 12,
+          overflow: "auto", maxHeight: 520,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: done ? colors.green : colors.red }} />
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: colors.orange }} />
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: colors.green }} />
+            <span style={{ marginLeft: 8, fontSize: 11, color: colors.textMuted }}>arkbioai-pipeline.log</span>
+          </div>
+          {logs.map((log, i) => (
+            <div key={i} style={{
+              color: log.includes("✓") || log.includes("Acc:") ? colors.green
+                   : log.includes("Flagged") || log.includes("Essential") ? colors.orange
+                   : colors.textMuted,
+              lineHeight: 1.7, fontSize: 11.5,
+              opacity: i >= logs.length - 4 ? 1 : 0.5,
+            }}>
+              <span style={{ color: colors.grayDark }}>{'>'} </span>{log}
+            </div>
+          ))}
+          {!done && <span style={{ color: orgColor, animation: "blink 1s step-end infinite" }}>▊</span>}
+        </div>
+      </div>
+
+      {done && (
+        <button onClick={onNext} style={{
+          marginTop: 28, padding: "14px 32px", borderRadius: 12, border: "none",
+          background: colors.green, color: colors.bg, fontSize: 16,
+          cursor: "pointer", fontWeight: 700, width: "100%",
+        }}>Ver Resultados →</button>
+      )}
+
+      <style>{`
+        @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+      `}</style>
+    </div>
+  );
+}
+
 // ── Main App ──
 export default function ArkBioAIDemo() {
   const [screen, setScreen] = useState("home");
   const [selectedGene, setSelectedGene] = useState(null);
+  const [exploreConfig, setExploreConfig] = useState(null);
 
   const handleGeneClick = (gene) => {
     setSelectedGene(gene);
     setScreen("report");
   };
+
+  const handleExploreSelect = (config) => {
+    setExploreConfig(config);
+    setScreen("explore_pipeline");
+  };
+
+  const isExploreFlow = screen === "explore_select" || screen === "explore_pipeline";
+
+  const navSteps = isExploreFlow || exploreConfig ? [
+    { id: "home", label: "Início", icon: "◈" },
+    { id: "explore_select", label: "Organismo", icon: "🧫" },
+    { id: "explore_pipeline", label: "Pipeline", icon: "⚡" },
+    { id: "dashboard", label: "Dashboard", icon: "◫" },
+    { id: "report", label: "Report", icon: "📋" },
+  ] : [
+    { id: "home", label: "Início", icon: "◈" },
+    { id: "upload", label: "Upload", icon: "↑" },
+    { id: "pipeline", label: "Pipeline", icon: "⚡" },
+    { id: "dashboard", label: "Dashboard", icon: "◫" },
+    { id: "report", label: "Report", icon: "📋" },
+  ];
 
   return (
     <div style={{
@@ -866,16 +1363,18 @@ export default function ArkBioAIDemo() {
       fontFamily: "'Outfit', 'Segoe UI', sans-serif",
     }}>
       <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-      <NavBar currentStep={screen} onNavigate={setScreen} />
+      <NavBar currentStep={screen} onNavigate={setScreen} steps={navSteps} />
 
       {screen === "home" && (
         <HomeScreen
           onStart={() => setScreen("upload")}
-          onExplore={() => setScreen("dashboard")}
+          onExplore={() => { setExploreConfig(null); setScreen("explore_select"); }}
         />
       )}
       {screen === "upload" && <UploadScreen onNext={() => setScreen("pipeline")} />}
       {screen === "pipeline" && <PipelineScreen onNext={() => setScreen("dashboard")} />}
+      {screen === "explore_select" && <ExploreSelectScreen onSelect={handleExploreSelect} />}
+      {screen === "explore_pipeline" && <ExplorePipelineScreen config={exploreConfig} onNext={() => setScreen("dashboard")} />}
       {screen === "dashboard" && <DashboardScreen onGeneClick={handleGeneClick} />}
       {screen === "report" && <ReportScreen gene={selectedGene} onBack={() => setScreen("dashboard")} />}
     </div>
